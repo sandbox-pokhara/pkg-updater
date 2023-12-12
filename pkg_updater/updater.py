@@ -34,17 +34,17 @@ def sleep(timeout: int):
     print()
 
 
-def get_running_processes(text: str):
+def get_running_processes(name: str, cmdline: str):
     proc_iter = psutil.process_iter()
     processes: list[psutil.Process] = []
     for i in proc_iter:
         try:
-            for cmd in i.cmdline():
-                if "--restart" in cmd:
-                    # filter self
-                    break
-                if text in cmd:
-                    processes.append(i)
+            i_cmdline = " ".join(i.cmdline())
+            if "--restart" in i_cmdline:
+                # filter self
+                break
+            if name in i.name() and cmdline in i_cmdline:
+                processes.append(i)
         except psutil.Error:
             pass
     return processes
@@ -69,19 +69,23 @@ def install_updates(pkg_name: str, extra_index_url: str = ""):
     with Popen(cmd, stdout=PIPE, stderr=PIPE, text=True) as p:
         if p.stdout:
             for line in p.stdout:
-                print(line.strip())
+                if line:
+                    print(line.strip())
         if p.stderr:
             for line in p.stderr:
-                print(line.strip())
+                if line and "[notice]" not in line:
+                    print(line.strip())
 
 
 def main():
     parser = ArgumentParser()
     parser.add_argument("package_name")
-    parser.add_argument("--extra-index-url")
+    parser.add_argument("--extra-index-url", default="")
     parser.add_argument("--interval", default=900, type=int)
     parser.add_argument("--delay-first", default=900, type=int)
-    parser.add_argument("--restart")
+    parser.add_argument("--restart", action="store_true")
+    parser.add_argument("--process-name", default="")
+    parser.add_argument("--process-cmdline", default="")
     args = parser.parse_args()
     sleep(args.delay_first)
     while True:
@@ -89,16 +93,19 @@ def main():
             if get_is_up_to_date(args.package_name, args.extra_index_url):
                 print("Already up to date.")
             else:
-                if args.restart:
+                if args.restart and args.process_name:
                     print("Gracefully shutting down running processes...")
-                    processes = get_running_processes(args.restart)
+                    processes = get_running_processes(
+                        args.process_name, args.process_cmdline
+                    )
                     data = [(i.cmdline(), i.cwd()) for i in processes]
                     for i in processes:
+                        print(f"Closing process: {i.name()}")
                         i.terminate()
                 else:
                     data = []
                 install_updates(args.package_name, args.extra_index_url)
-                if args.restart:
+                if args.restart and args.process_name:
                     print("Restarting closed processes...")
                     for cmd, cwd in data:
                         Popen(
