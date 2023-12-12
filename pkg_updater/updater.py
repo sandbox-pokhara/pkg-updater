@@ -42,7 +42,7 @@ def get_running_processes(name: str, cmdline: str):
             i_cmdline = " ".join(i.cmdline())
             if "--restart" in i_cmdline:
                 # filter self
-                break
+                continue
             if name in i.name() and cmdline in i_cmdline:
                 processes.append(i)
         except psutil.Error:
