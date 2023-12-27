@@ -3,12 +3,18 @@ from subprocess import DEVNULL
 from subprocess import PIPE
 from subprocess import Popen
 from subprocess import check_output
+import subprocess
 from threading import Condition
 
 import psutil
 from PyQt6.QtCore import QThread
 
 from pkg_updater import logger
+
+# hide flashing console when using pythonw
+startupinfo = subprocess.STARTUPINFO()
+startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+startupinfo.wShowWindow = subprocess.SW_HIDE
 
 
 def get_running_processes(name: str, cmdline: str):
@@ -33,7 +39,7 @@ def get_is_up_to_date(pkg_name: str, extra_index_url: str = ""):
         cmd += ["--extra-index-url", extra_index_url]
     cmd += ["--dry-run"]
     logger.info("Checking for updates...")
-    stdout = check_output(cmd, stderr=PIPE).decode()
+    stdout = check_output(cmd, stderr=PIPE, startupinfo=startupinfo).decode()
     return "Would install" not in stdout
 
 
@@ -43,7 +49,9 @@ def install_updates(pkg_name: str, extra_index_url: str = ""):
         cmd += ["--extra-index-url", extra_index_url]
 
     logger.info("Installing updates...")
-    with Popen(cmd, stdout=PIPE, stderr=PIPE, text=True) as p:
+    with Popen(
+        cmd, stdout=PIPE, stderr=PIPE, text=True, startupinfo=startupinfo
+    ) as p:
         if p.stdout:
             for line in p.stdout:
                 line = line.strip()
@@ -99,7 +107,7 @@ class UpdaterThread(QThread):
                                 cwd=cwd,
                                 stderr=DEVNULL,
                                 stdout=DEVNULL,
-                                start_new_session=True,
+                                startupinfo=startupinfo,
                             )
                     logger.info("Complete.")
             except Exception:
