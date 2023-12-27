@@ -1,4 +1,6 @@
+import ctypes
 import logging
+from pathlib import Path
 import sys
 from argparse import ArgumentParser
 from argparse import Namespace
@@ -24,13 +26,18 @@ from pkg_updater.handlers import PyQtHandler
 from pkg_updater.logger import root
 from pkg_updater.updater import UpdaterThread
 
+# fix taskbar icon for some windows version
+ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+    "sandbox.pkgupdater"
+)
+
 
 class MainWindow(QMainWindow):
     def __init__(self, instance: QCoreApplication, args: Namespace):
         super().__init__()
 
         # window configuration
-        self.icon = QIcon("favicon.svg")
+        self.icon = QIcon(str(Path(__file__).parent / "favicon.svg"))
         self.setWindowTitle("Package Updater")
         self.setWindowIcon(self.icon)
 
