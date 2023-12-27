@@ -1,37 +1,14 @@
-import sys
-import time
-import traceback
-from argparse import ArgumentParser
-from msvcrt import getch
-from msvcrt import kbhit
+from argparse import Namespace
 from subprocess import DEVNULL
 from subprocess import PIPE
 from subprocess import Popen
 from subprocess import check_output
+from threading import Condition
 
 import psutil
+from PyQt6.QtCore import QThread
 
-
-def sleep(timeout: int):
-    """
-    Sleep for a given amount of time,
-    Can be canceled at any time
-    """
-    start = time.time()
-    while True:
-        elapsed = int(time.time() - start)
-        remaining = timeout - elapsed
-        sys.stdout.write(
-            f"\rNext update in {remaining}s, press enter to continue..."
-        )
-        sys.stdout.flush()
-        if remaining <= 0:
-            break
-        if kbhit():
-            if getch() == b"\r":
-                break
-        time.sleep(0.1)
-    print()
+from pkg_updater import logger
 
 
 def get_running_processes(name: str, cmdline: str):
@@ -55,7 +32,7 @@ def get_is_up_to_date(pkg_name: str, extra_index_url: str = ""):
     if extra_index_url:
         cmd += ["--extra-index-url", extra_index_url]
     cmd += ["--dry-run"]
-    print("Checking for updates...")
+    logger.info("Checking for updates...")
     stdout = check_output(cmd, stderr=PIPE).decode()
     return "Would install" not in stdout
 
@@ -65,61 +42,68 @@ def install_updates(pkg_name: str, extra_index_url: str = ""):
     if extra_index_url:
         cmd += ["--extra-index-url", extra_index_url]
 
-    print("Installing updates...")
+    logger.info("Installing updates...")
     with Popen(cmd, stdout=PIPE, stderr=PIPE, text=True) as p:
         if p.stdout:
             for line in p.stdout:
+                line = line.strip()
                 if line:
-                    print(line.strip())
+                    logger.info(line)
         if p.stderr:
             for line in p.stderr:
+                line = line.strip()
                 if line and "[notice]" not in line:
-                    print(line.strip())
+                    logger.info(line)
 
 
-def main():
-    parser = ArgumentParser()
-    parser.add_argument("package_name")
-    parser.add_argument("--extra-index-url", default="")
-    parser.add_argument("--interval", default=900, type=int)
-    parser.add_argument("--delay-first", default=900, type=int)
-    parser.add_argument("--restart", action="store_true")
-    parser.add_argument("--process-name", default="")
-    parser.add_argument("--process-cmdline", default="")
-    args = parser.parse_args()
-    sleep(args.delay_first)
-    while True:
-        try:
-            if get_is_up_to_date(args.package_name, args.extra_index_url):
-                print("Already up to date.")
-            else:
-                if args.restart and args.process_name:
-                    print("Gracefully shutting down running processes...")
-                    processes = get_running_processes(
-                        args.process_name, args.process_cmdline
-                    )
-                    data = [(i.cmdline(), i.cwd()) for i in processes]
-                    for i in processes:
-                        print(f"Closing process: {i.name()}")
-                        i.terminate()
+class UpdaterThread(QThread):
+    def __init__(self, args: Namespace, update_condition: Condition):
+        super().__init__()
+        self.update_condition = update_condition
+        self.args = args
+
+    def run(self):
+        logger.info(f"Next update in {self.args.delay_first}s...")
+        with self.update_condition:
+            self.update_condition.wait(self.args.delay_first)
+        while True:
+            try:
+                if get_is_up_to_date(
+                    self.args.package_name, self.args.extra_index_url
+                ):
+                    logger.info("Already up to date.")
                 else:
-                    data = []
-                install_updates(args.package_name, args.extra_index_url)
-                if args.restart and args.process_name:
-                    print("Restarting closed processes...")
-                    for cmd, cwd in data:
-                        Popen(
-                            cmd,
-                            cwd=cwd,
-                            stderr=DEVNULL,
-                            stdout=DEVNULL,
-                            start_new_session=True,
+                    if self.args.restart and self.args.process_name:
+                        logger.info(
+                            "Gracefully shutting down running processes..."
                         )
-                print("Complete.")
-        except Exception:
-            traceback.print_exc()
-        sleep(args.interval)
-
-
-if __name__ == "__main__":
-    main()
+                        processes = get_running_processes(
+                            self.args.process_name, self.args.process_cmdline
+                        )
+                        closed_processes = [
+                            (i.cmdline(), i.cwd()) for i in processes
+                        ]
+                        for i in processes:
+                            logger.info(f"Closing process: {i.name()}")
+                            i.terminate()
+                    else:
+                        closed_processes = []
+                    install_updates(
+                        self.args.package_name, self.args.extra_index_url
+                    )
+                    if self.args.restart and self.args.process_name:
+                        logger.info("Restarting closed processes...")
+                        for cmd, cwd in closed_processes:
+                            Popen(
+                                cmd,
+                                cwd=cwd,
+                                stderr=DEVNULL,
+                                stdout=DEVNULL,
+                                start_new_session=True,
+                            )
+                    logger.info("Complete.")
+            except Exception:
+                logger.exception("Unhandled exception occurred.")
+            logger.info(f"Next update in {self.args.interval}s...")
+            with self.update_condition:
+                self.update_condition.wait(self.args.interval)

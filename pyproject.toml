@@ -4,8 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pkg-updater"
-version = "1.0.2"
-dependencies = ["psutil"]
+version = "1.0.3"
+dependencies = [
+    "psutil",
+    "PyQt6==6.5.3",
+    "PyQt6-Qt6==6.5.3",
+    "PyQt6-sip==13.6.0",
+]
 requires-python = ">=3"
 authors = [{ name = "Pradish Bijukchhe", email = "pradishbijukchhe@gmail.com" }]
 description = "A python script to update packages"
@@ -18,8 +23,8 @@ classifiers = ["Programming Language :: Python :: 3"]
 Homepage = "https://github.com/sandbox-pokhara/pkg-updater"
 Issues = "https://github.com/sandbox-pokhara/pkg-updater/issues"
 
-[project.scripts]
-pkg-updater = "pkg_updater.updater:main"
+[project.gui-scripts]
+pkg-updater = "pkg_updater.app:main"
 
 [tool.setuptools]
 include-package-data = true
@@ -37,3 +42,4 @@ preview = true
 
 [tool.pyright]
 typeCheckingMode = "strict"
+reportUnknownMemberType = false
