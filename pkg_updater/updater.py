@@ -1,12 +1,10 @@
+import subprocess
 from argparse import Namespace
-from subprocess import DEVNULL
 from subprocess import PIPE
 from subprocess import Popen
 from subprocess import check_output
-import subprocess
 from threading import Condition
 
-import psutil
 from PyQt6.QtCore import QThread
 
 from pkg_updater import logger
@@ -15,22 +13,6 @@ from pkg_updater import logger
 startupinfo = subprocess.STARTUPINFO()
 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 startupinfo.wShowWindow = subprocess.SW_HIDE
-
-
-def get_running_processes(name: str, cmdline: str):
-    proc_iter = psutil.process_iter()
-    processes: list[psutil.Process] = []
-    for i in proc_iter:
-        try:
-            i_cmdline = " ".join(i.cmdline())
-            if "--restart" in i_cmdline:
-                # filter self
-                continue
-            if name in i.name() and cmdline in i_cmdline:
-                processes.append(i)
-        except psutil.Error:
-            pass
-    return processes
 
 
 def get_is_up_to_date(pkg_name: str, extra_index_url: str = ""):
@@ -81,34 +63,9 @@ class UpdaterThread(QThread):
                 ):
                     logger.info("Already up to date.")
                 else:
-                    if self.args.restart and self.args.process_name:
-                        logger.info(
-                            "Gracefully shutting down running processes..."
-                        )
-                        processes = get_running_processes(
-                            self.args.process_name, self.args.process_cmdline
-                        )
-                        closed_processes = [
-                            (i.cmdline(), i.cwd()) for i in processes
-                        ]
-                        for i in processes:
-                            logger.info(f"Closing process: {i.name()}")
-                            i.terminate()
-                    else:
-                        closed_processes = []
                     install_updates(
                         self.args.package_name, self.args.extra_index_url
                     )
-                    if self.args.restart and self.args.process_name:
-                        logger.info("Restarting closed processes...")
-                        for cmd, cwd in closed_processes:
-                            Popen(
-                                cmd,
-                                cwd=cwd,
-                                stderr=DEVNULL,
-                                stdout=DEVNULL,
-                                startupinfo=startupinfo,
-                            )
                     logger.info("Complete.")
             except Exception:
                 logger.exception("Unhandled exception occurred.")

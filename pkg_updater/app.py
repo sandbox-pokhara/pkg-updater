@@ -1,10 +1,10 @@
 import ctypes
 import logging
-from pathlib import Path
 import sys
 from argparse import ArgumentParser
 from argparse import Namespace
 from logging import Formatter
+from pathlib import Path
 from threading import Condition
 from typing import Optional
 
@@ -113,9 +113,6 @@ def main():
     parser.add_argument("--extra-index-url", default="")
     parser.add_argument("--interval", default=900, type=int)
     parser.add_argument("--delay-first", default=900, type=int)
-    parser.add_argument("--restart", action="store_true")
-    parser.add_argument("--process-name", default="")
-    parser.add_argument("--process-cmdline", default="")
     args = parser.parse_args()
     app = QApplication([])
     window = MainWindow(app, args)
